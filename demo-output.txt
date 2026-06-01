@@ -1,0 +1,91 @@
+==================================================================
+SDA-Pro Security Incident Response & Threat Mitigation Platform 
+==================================================================
+
+--- STEP 1: Alert Ingestion from 2 Sources ---
+[Adapter] Fetching alert from Splunk SIEM mock source...
+[Factory Method] SplunkNormalizer converted raw alert to CanonicalAlert.
+[Observer] Publishing event -> ALERT_INGESTED: Alert ingested from Splunk SIEM
+[DashboardUpdater] Dashboard updated: Alert ingested from Splunk SIEM
+[Adapter] Fetching alert from Firewall mock source...
+[Factory Method] FirewallNormalizer converted raw alert to CanonicalAlert.
+[Observer] Publishing event -> ALERT_INGESTED: Alert ingested from Palo Alto Firewall
+[DashboardUpdater] Dashboard updated: Alert ingested from Palo Alto Firewall
+
+--- STEP 2: Composite Grouping ---
+[Composite] Added alert to campaign: Possible Credential Attack Campaign
+[Composite] Added alert to campaign: Possible Credential Attack Campaign
+  AlertCampaign: Possible Credential Attack Campaign severity=HIGH
+    SingleAlert: CanonicalAlert{ALERT-SPL-001, SPLUNK, severity=HIGH, src=185.21.10.5}
+    SingleAlert: CanonicalAlert{ALERT-FW-001, FIREWALL, severity=MEDIUM, src=45.66.77.88}
+
+--- STEP 3: Enrichment Pipeline ---
+[Chain] Starting enrichment pipeline...
+[Chain] DeduplicationHandler: no duplicate found for CMP-001
+[Chain] GeoIPHandler: IP 185.21.10.5 mapped to high-risk region.
+[Proxy] Cache miss. Calling real threat intel provider...
+[Adapter] VirusTotalAdapter queried for: 185.21.10.5
+[Chain] ThreatIntelHandler: ReputationResult{185.21.10.5, score=90, verdict='MALICIOUS'}
+[Chain] AssetContextHandler: destination asset marked as HIGH criticality.
+[Chain] ClassificationHandler: severity upgraded to CRITICAL.
+[Observer] Publishing event -> ALERT_ENRICHED: Alert enrichment completed
+[DashboardUpdater] Dashboard updated: Alert enrichment completed
+
+--- STEP 4: Incident Creation and State Lifecycle ---
+[State] Incident created in NewState.
+[Observer] Publishing event -> INCIDENT_CREATED: Incident created: INC-001
+[DashboardUpdater] Dashboard updated: Incident created: INC-001
+[AuditLogger] Audit record saved: INCIDENT_CREATED: Incident created: INC-001
+[State] NewState -> UnderTriageState
+[State] UnderTriageState -> ContainmentState
+
+--- STEP 5: Response Orchestration ---
+[Facade] Starting incident response orchestration for INC-001
+[Strategy] Aggressive Containment selected for CRITICAL incident.
+[Proxy] Checking authorization for role: SOC_MANAGER
+[Decorator] ApprovalGateDecorator: approval granted.
+[Decorator] AuditLogDecorator: pre-action audit log.
+[Decorator] RollbackDecorator: rollback snapshot saved.
+[Action] Blocking malicious IP: 185.21.10.5
+[Decorator] AuditLogDecorator: post-action audit log.
+[Decorator] MetricsDecorator: action took 6 ms.
+[Observer] Publishing event -> RESPONSE_ACTION_EXECUTED: Response action executed: BlockIPAction -> SUCCESS (Executed on 185.21.10.5)
+[DashboardUpdater] Dashboard updated: Response action executed: BlockIPAction -> SUCCESS (Executed on 185.21.10.5)
+[AuditLogger] Audit record saved: RESPONSE_ACTION_EXECUTED: Response action executed: BlockIPAction -> SUCCESS (Executed on 185.21.10.5)
+[NotificationDispatcher] Notification sent for event: RESPONSE_ACTION_EXECUTED
+[MetricsCollector] Metrics updated for: RESPONSE_ACTION_EXECUTED
+[Proxy] Checking authorization for role: SOC_MANAGER
+[Decorator] ApprovalGateDecorator: approval granted.
+[Decorator] AuditLogDecorator: pre-action audit log.
+[Decorator] RollbackDecorator: rollback snapshot saved.
+[Action] Isolating endpoint: 185.21.10.5
+[Decorator] AuditLogDecorator: post-action audit log.
+[Decorator] MetricsDecorator: action took 3 ms.
+[Observer] Publishing event -> RESPONSE_ACTION_EXECUTED: Response action executed: IsolateEndpointAction -> SUCCESS (Executed on 185.21.10.5)
+[DashboardUpdater] Dashboard updated: Response action executed: IsolateEndpointAction -> SUCCESS (Executed on 185.21.10.5)
+[AuditLogger] Audit record saved: RESPONSE_ACTION_EXECUTED: Response action executed: IsolateEndpointAction -> SUCCESS (Executed on 185.21.10.5)
+[NotificationDispatcher] Notification sent for event: RESPONSE_ACTION_EXECUTED
+[MetricsCollector] Metrics updated for: RESPONSE_ACTION_EXECUTED
+[State] ContainmentState -> EradicationState
+[State] EradicationState -> RecoveryState
+[State] RecoveryState -> PostIncidentReviewState
+[State] PostIncidentReviewState -> ClosedState
+
+--- STEP 6: MVC Dashboard Output ---
+========== SOC DASHBOARD (MVC View) ==========
+System started. Waiting for security alerts...
+Incident INC-001 completed with state: Closed
+=============================================
+
+--- STEP 7: Proxy Cache Verification ---
+[Chain] Starting enrichment pipeline...
+[Chain] DeduplicationHandler: no duplicate found for CMP-001
+[Chain] GeoIPHandler: IP 185.21.10.5 mapped to high-risk region.
+[Proxy] Cache hit for indicator: 185.21.10.5
+[Chain] ThreatIntelHandler: ReputationResult{185.21.10.5, score=90, verdict='MALICIOUS'}
+[Chain] AssetContextHandler: destination asset marked as HIGH criticality.
+[Chain] ClassificationHandler: severity upgraded to CRITICAL.
+[Observer] Publishing event -> ALERT_ENRICHED: Alert enrichment completed
+[DashboardUpdater] Dashboard updated: Alert enrichment completed
+
+Demo completed successfully.
