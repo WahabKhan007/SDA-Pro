@@ -1,0 +1,61 @@
+@startuml SDA_Pro_Component_Diagram
+skinparam componentStyle uml2
+title SDA-Pro — SOA Component and Event-Driven Architecture
+
+actor "SOC Analyst" as Analyst
+cloud "Mock External Security Sources" {
+  [Splunk SIEM] as Splunk
+  [Firewall Logs] as Firewall
+}
+cloud "Mock Threat Intel Providers" {
+  [VirusTotal API] as VT
+  [MISP API] as MISP
+}
+
+package "SOC Dashboard (MVC)" {
+  [Controllers] as Controllers
+  [Models] as Models
+  [Views] as Views
+}
+
+package "SOA Service Layer" {
+  [Alert Ingestion Service] as AIS
+  [Enrichment & Correlation Service] as ECS
+  [Incident Management Service] as IMS
+  [Response Orchestration Service] as ROS
+  [Threat Intel Service] as TIS
+  [Notification Service] as NS
+  [Audit Service] as AS
+}
+
+queue "In-Memory Event Bus\n(Observer Prototype)" as Bus
+node "In-Memory Repositories" as Repo
+
+Analyst --> Views : monitors/responds
+Views --> Controllers : user actions
+Controllers --> Models : data binding
+Controllers --> IMS : incident queries
+Controllers --> ROS : manual response
+
+Splunk --> AIS : mock alert
+Firewall --> AIS : mock alert
+AIS --> ECS : CanonicalAlert
+ECS --> IMS : create incident
+ROS --> TIS : reputation check
+ROS --> NS : dispatch notification
+TIS --> VT : adapter call
+TIS --> MISP : adapter call
+
+AIS ..> Bus : AlertIngested
+ECS ..> Bus : AlertEnriched
+IMS ..> Bus : IncidentCreated\nIncidentStateChanged
+ROS ..> Bus : ResponseActionExecuted
+Bus ..> Views : DashboardUpdater
+Bus ..> AS : AuditLogger
+Bus ..> NS : NotificationDispatcher
+Bus ..> Repo : MetricsCollector
+
+AIS --> Repo : alert records
+IMS --> Repo : incident records
+AS --> Repo : audit trail
+@enduml

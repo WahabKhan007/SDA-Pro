@@ -1,0 +1,53 @@
+@startuml SDA_Pro_Sequence_Response
+autonumber
+title Sequence — Incident Response Orchestration
+actor "SOC Analyst" as Analyst
+participant "DashboardController\n(MVC Controller)" as Controller
+participant "ResponseOrchestrationService" as ROS
+participant "IncidentResponseFacade\n(Facade)" as Facade
+participant "Incident" as Incident
+participant "ResponseStrategySelector" as Selector
+participant "AggressiveContainmentStrategy\n(Strategy)" as Strategy
+participant "ResponseActionFactory\n(Factory Method)" as Factory
+participant "BlockIPAction" as Action
+participant "AuditLogDecorator\n(Decorator)" as AuditDec
+participant "ApprovalGateDecorator\n(Decorator)" as ApprovalDec
+participant "AuthorizedResponseActionProxy\n(Proxy)" as Proxy
+participant "EventBusPublisher\n(Observer)" as Bus
+participant "DashboardUpdater" as Dashboard
+participant "AuditLogger" as Audit
+participant "NotificationDispatcher" as Notify
+
+Analyst -> Controller : click Execute Response
+Controller -> ROS : respond(incidentId)
+ROS -> Facade : assessAndRespond(incident)
+Facade -> Incident : getSeverity()
+Facade -> Selector : selectStrategy(incident)
+Selector --> Facade : AggressiveContainmentStrategy
+Facade -> Strategy : determineActions(incident)
+Strategy --> Facade : [BLOCK_IP, ISOLATE_ENDPOINT]
+Facade -> Factory : createAction(BLOCK_IP)
+Factory --> Facade : BlockIPAction
+Facade -> AuditDec : wrap(BlockIPAction)
+Facade -> ApprovalDec : wrap(AuditLogDecorator)
+Facade -> Proxy : execute(decoratedAction)
+Proxy -> Proxy : validate analyst permission
+Proxy -> ApprovalDec : execute()
+ApprovalDec -> ApprovalDec : approval granted
+ApprovalDec -> AuditDec : execute()
+AuditDec -> AuditDec : pre-action audit log
+AuditDec -> Action : execute()
+Action --> AuditDec : ActionOutcome.SUCCESS
+AuditDec -> AuditDec : post-action audit log
+AuditDec --> ApprovalDec : outcome
+ApprovalDec --> Proxy : outcome
+Proxy --> Facade : outcome
+Facade -> Incident : initiateContainment()
+Facade -> Bus : publish(ResponseActionExecuted)
+Bus -> Dashboard : update(event)
+Bus -> Audit : update(event)
+Bus -> Notify : update(event)
+Facade --> ROS : response result
+ROS --> Controller : success
+Controller --> Analyst : show updated incident
+@enduml
