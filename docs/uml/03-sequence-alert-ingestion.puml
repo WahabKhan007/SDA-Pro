@@ -1,0 +1,51 @@
+@startuml SDA_Pro_Sequence_Alert_Ingestion
+autonumber
+title Sequence — Alert Ingestion and Enrichment
+actor "Splunk SIEM" as Splunk
+participant "SplunkAdapter\n(Adapter)" as Adapter
+participant "AlertIngestionService" as AIS
+participant "AlertNormalizerFactory\n(Factory Method)" as Factory
+participant "SplunkNormalizer" as Normalizer
+participant "SingleAlert" as Single
+participant "AlertCampaign\n(Composite)" as Campaign
+participant "DeduplicationHandler" as H1
+participant "GeoIPHandler" as H2
+participant "ThreatIntelHandler" as H3
+participant "CachingThreatIntelProxy\n(Proxy)" as Proxy
+participant "VirusTotalAdapter\n(Adapter)" as VT
+participant "ClassificationHandler" as H4
+participant "IncidentManagementService" as IMS
+participant "EventBusPublisher\n(Singleton + Observer)" as Bus
+participant "DashboardUpdater" as Dashboard
+participant "AuditLogger" as Audit
+
+Splunk -> Adapter : external alert arrives
+Adapter -> AIS : fetchAlert(): RawAlert
+AIS -> Factory : createNormalizer(SPLUNK)
+Factory --> AIS : SplunkNormalizer
+AIS -> Normalizer : normalize(rawAlert)
+Normalizer --> AIS : CanonicalAlert
+AIS -> Single : create(canonicalAlert)
+AIS -> Campaign : create("Suspicious Login Campaign")
+Campaign -> Campaign : add(singleAlert)
+AIS -> H1 : handle(campaign)
+H1 -> H2 : handle(campaign)
+H2 -> H3 : handle(campaign)
+H3 -> Proxy : checkReputation(sourceIp)
+Proxy -> Proxy : check cache
+alt cache miss
+  Proxy -> VT : checkReputation(sourceIp)
+  VT --> Proxy : ReputationResult(MALICIOUS)
+else cache hit
+  Proxy --> H3 : cached result
+end
+Proxy --> H3 : reputation result
+H3 -> H4 : handle(campaign)
+H4 -> H4 : classify severity
+H4 -> IMS : createIncident(campaign)
+IMS -> Bus : publish(IncidentCreated)
+Bus -> Dashboard : update(event)
+Bus -> Audit : update(event)
+IMS --> AIS : incident created
+AIS --> Splunk : accepted
+@enduml

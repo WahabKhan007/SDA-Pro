@@ -1,0 +1,186 @@
+@startuml SDA_Pro_Class_Diagram
+skinparam packageStyle rectangle
+skinparam linetype ortho
+title SDA-Pro — Class Diagram Covering Required Design Patterns
+
+package "ingestion (Adapter + Factory Method + Singleton)" {
+interface ExternalAlertAdapter { +fetchAlert(): RawAlert }
+class SplunkAdapter
+class FirewallAdapter
+interface AlertNormalizer { +normalize(raw: RawAlert): CanonicalAlert }
+class SplunkNormalizer
+class FirewallNormalizer
+class CrowdStrikeNormalizer
+class AlertNormalizerFactory { +createNormalizer(type: AlertSourceType): AlertNormalizer }
+class IngestionConfigManager <<Singleton>> { -instance: IngestionConfigManager +getInstance(): IngestionConfigManager }
+class AlertIngestionService
+ExternalAlertAdapter <|.. SplunkAdapter
+ExternalAlertAdapter <|.. FirewallAdapter
+AlertNormalizer <|.. SplunkNormalizer
+AlertNormalizer <|.. FirewallNormalizer
+AlertNormalizer <|.. CrowdStrikeNormalizer
+AlertNormalizerFactory ..> AlertNormalizer : creates
+AlertIngestionService ..> ExternalAlertAdapter : reads from
+AlertIngestionService ..> AlertNormalizerFactory : uses
+}
+
+package "alert.composite (Composite)" {
+interface AlertComponent { +getId(): String +getSeverity(): Severity +display(): void +add(c: AlertComponent): void }
+class SingleAlert
+class AlertCampaign { -children: List<AlertComponent> }
+class IncidentCluster { -children: List<AlertComponent> }
+AlertComponent <|.. SingleAlert
+AlertComponent <|.. AlertCampaign
+AlertComponent <|.. IncidentCluster
+AlertCampaign o-- "0..*" AlertComponent : children
+IncidentCluster o-- "0..*" AlertComponent : children
+}
+
+package "enrichment.pipeline (Chain of Responsibility)" {
+abstract class EnrichmentHandler { -nextHandler: EnrichmentHandler +setNext(h: EnrichmentHandler): EnrichmentHandler +handle(alert: AlertComponent): void }
+class DeduplicationHandler
+class GeoIPHandler
+class ThreatIntelHandler
+class AssetContextHandler
+class ClassificationHandler
+class EnrichmentCorrelationService
+EnrichmentHandler <|-- DeduplicationHandler
+EnrichmentHandler <|-- GeoIPHandler
+EnrichmentHandler <|-- ThreatIntelHandler
+EnrichmentHandler <|-- AssetContextHandler
+EnrichmentHandler <|-- ClassificationHandler
+EnrichmentHandler --> EnrichmentHandler : nextHandler
+EnrichmentCorrelationService ..> EnrichmentHandler : starts pipeline
+}
+
+package "threatintel (Adapter + Proxy + Singleton)" {
+interface ThreatIntelProvider { +checkReputation(indicator: String): ReputationResult }
+class VirusTotalAdapter
+class MISPAdapter
+interface ThreatIntelProxy { +checkReputation(indicator: String): ReputationResult }
+class CachingThreatIntelProxy { -realProvider: ThreatIntelProvider }
+class ThreatIntelCache <<Singleton>>
+ThreatIntelProvider <|.. VirusTotalAdapter
+ThreatIntelProvider <|.. MISPAdapter
+ThreatIntelProxy <|.. CachingThreatIntelProxy
+CachingThreatIntelProxy --> ThreatIntelProvider : delegates
+CachingThreatIntelProxy --> ThreatIntelCache : cache
+}
+
+package "incident.state (State)" {
+class Incident { -currentState: IncidentState +setState(s: IncidentState): void +beginTriage(): void +initiateContainment(): void +close(): void }
+interface IncidentState { +beginTriage(i: Incident): void +initiateContainment(i: Incident): void +beginEradication(i: Incident): void +beginRecovery(i: Incident): void +close(i: Incident): void +getName(): String }
+class NewState
+class UnderTriageState
+class ContainmentState
+class EradicationState
+class RecoveryState
+class PostIncidentReviewState
+class ClosedState
+class IncidentManagementService
+Incident --> IncidentState : currentState
+IncidentState <|.. NewState
+IncidentState <|.. UnderTriageState
+IncidentState <|.. ContainmentState
+IncidentState <|.. EradicationState
+IncidentState <|.. RecoveryState
+IncidentState <|.. PostIncidentReviewState
+IncidentState <|.. ClosedState
+IncidentManagementService ..> Incident
+}
+
+package "response (Strategy + Factory + Decorator + Proxy + Facade)" {
+interface ResponseStrategy { +determineActions(incident: Incident): List<ResponseActionType> }
+class AggressiveContainmentStrategy
+class BalancedStrategy
+class ConservativeStrategy
+class WatchAndWaitStrategy
+class ResponseStrategySelector
+interface ResponseAction { +execute(): ActionOutcome +rollback(): ActionOutcome }
+class BlockIPAction
+class IsolateEndpointAction
+class DisableUserAction
+class EscalateAction
+class ResponseActionFactory
+abstract class ResponseActionDecorator { -wrappedAction: ResponseAction }
+class AuditLogDecorator
+class ApprovalGateDecorator
+class RollbackDecorator
+class MetricsDecorator
+interface ResponseActionProxy { +execute(action: ResponseAction): ActionOutcome }
+class AuthorizedResponseActionProxy
+class IncidentResponseFacade
+class ResponseOrchestrationService
+ResponseStrategy <|.. AggressiveContainmentStrategy
+ResponseStrategy <|.. BalancedStrategy
+ResponseStrategy <|.. ConservativeStrategy
+ResponseStrategy <|.. WatchAndWaitStrategy
+ResponseStrategySelector ..> ResponseStrategy : selects
+ResponseAction <|.. BlockIPAction
+ResponseAction <|.. IsolateEndpointAction
+ResponseAction <|.. DisableUserAction
+ResponseAction <|.. EscalateAction
+ResponseActionFactory ..> ResponseAction : creates
+ResponseAction <|.. ResponseActionDecorator
+ResponseActionDecorator --> ResponseAction : wraps
+ResponseActionDecorator <|-- AuditLogDecorator
+ResponseActionDecorator <|-- ApprovalGateDecorator
+ResponseActionDecorator <|-- RollbackDecorator
+ResponseActionDecorator <|-- MetricsDecorator
+ResponseActionProxy <|.. AuthorizedResponseActionProxy
+AuthorizedResponseActionProxy --> ResponseAction : protects
+IncidentResponseFacade ..> ResponseStrategySelector
+IncidentResponseFacade ..> ResponseActionFactory
+IncidentResponseFacade ..> ResponseActionProxy
+ResponseOrchestrationService ..> IncidentResponseFacade
+}
+
+package "events (Observer + Singleton)" {
+interface Subject { +attach(type: EventType, o: Observer): void +publish(e: DomainEvent): void }
+interface Observer { +update(e: DomainEvent): void }
+class EventBusPublisher <<Singleton>>
+class DomainEvent
+class DashboardUpdater
+class AuditLogger
+class NotificationDispatcher
+class MetricsCollector
+Subject <|.. EventBusPublisher
+Observer <|.. DashboardUpdater
+Observer <|.. AuditLogger
+Observer <|.. NotificationDispatcher
+Observer <|.. MetricsCollector
+EventBusPublisher o-- "0..*" Observer : observers
+EventBusPublisher ..> DomainEvent
+}
+
+package "notification (Abstract Factory)" {
+interface NotificationFactory { +createEmailNotifier(): Notifier +createSlackNotifier(): Notifier +createPagerDutyNotifier(): Notifier }
+class EnterpriseNotificationFactory
+class BasicNotificationFactory
+interface Notifier { +send(message: String): void }
+class EmailNotifier
+class SlackNotifier
+class PagerDutyNotifier
+NotificationFactory <|.. EnterpriseNotificationFactory
+NotificationFactory <|.. BasicNotificationFactory
+Notifier <|.. EmailNotifier
+Notifier <|.. SlackNotifier
+Notifier <|.. PagerDutyNotifier
+EnterpriseNotificationFactory ..> Notifier : creates family
+}
+
+package "dashboard (MVC)" {
+class DashboardController
+class IncidentController
+class DashboardModel
+class DashboardView
+DashboardController --> DashboardModel
+DashboardController --> DashboardView
+IncidentController --> DashboardModel
+IncidentController --> DashboardView
+}
+
+ThreatIntelHandler ..> ThreatIntelProxy : queries
+IncidentResponseFacade ..> EventBusPublisher : publishes
+Incident --> AlertComponent : affectedAlert
+@enduml
