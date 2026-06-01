@@ -79,7 +79,7 @@ http://localhost:9090
 
 ### GUI Features
 
-- Runs the existing Java backend workflow from the browser.
+- Runs the Java backend workflow from the browser.
 - Shows normalized alerts from Splunk and Firewall mock adapters.
 - Shows campaign severity using the Composite pattern.
 - Shows incident summary and final lifecycle state.
@@ -119,4 +119,4 @@ http://localhost:9090
 
 ## Submission Notes
 
-This prototype uses mock adapters and in-memory storage to keep the project easy to run and explain. The architecture is documented so it can be extended later with real APIs, PostgreSQL, Redis, RabbitMQ/Kafka, and WebSocket/SSE dashboard updates.
+This prototype uses mock adapters and in-memory storage to keep the project easy to run and explain.
